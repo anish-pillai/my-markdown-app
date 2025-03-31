@@ -62,7 +62,6 @@ greet("World");
         <Switch checked={mode === 'dark'} onChange={handleThemeChange} />
         <span>{mode === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
         <MarkdownRenderer markdownContent={fullMarkdownText} />
-        {/* We will handle images separately for now */}
       </Container>
     </ThemeProvider>
   );

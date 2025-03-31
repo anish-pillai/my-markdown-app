@@ -1,34 +1,22 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkMath from 'remark-math';
-// import rehypeRaw from 'rehype-raw'; // Keep this commented out
-import { BlockMath } from 'react-katex';
+import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import dracula from 'react-syntax-highlighter/dist/esm/styles/prism/dracula';
 import vs from 'react-syntax-highlighter/dist/esm/styles/prism/vs';
 import { Typography, useTheme } from '@mui/material';
-import remarkImages from 'remark-images'; // Add this import back
 
 interface MarkdownRendererProps {
   markdownContent: string;
 }
 
-interface ImageNode {
-  properties: {
-    src: string;
-    alt?: string;
-    title?: string;
-  };
-}
-
-interface ReactMarkdownImageProps {
-  node: ImageNode;
-  src?: string;
-  alt?: string;
-  title?: string;
-}
-
+/**
+ * A simplified Markdown renderer that supports Base64 images
+ */
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   markdownContent,
 }) => {
@@ -36,60 +24,79 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const isDarkMode = theme.palette.mode === 'dark';
   const syntaxHighlighterTheme = isDarkMode ? dracula : vs;
 
-  const components = {
-    code: ({
-      inline,
-      className,
-      children,
-      ...props
-    }: {
-      inline?: boolean;
-      className?: string;
-      children?: React.ReactNode;
-    }) => {
-      const match = /language-(\w+)/.exec(className || '');
-      const codeContent = String(children).replace(/\n$/, '');
+  // Custom URL transform function to allow Base64 images
+  const customUrlTransform = (url: string) => {
+    // If it's a Base64 data URL for an image, allow it
+    if (url.startsWith('data:image/')) {
+      return url;
+    }
 
-      if (!inline && match && match[1] === 'math') {
-        return <BlockMath math={codeContent} />;
+    // Otherwise, use the default URL transform for safety
+    return defaultUrlTransform(url);
+  };
+
+  // Define components for ReactMarkdown
+  const components: Components = {
+    // Custom image component to add styling to Base64 images
+    // img: (props) => {
+    //   // const isBase64 = props.src && props.src.startsWith('data:image/');
+
+    //   // // Add styling to Base64 images to make them more visible
+    //   // if (isBase64) {
+    //   //   return (
+    //   //     <img
+    //   //       {...props}
+    //   //       style={{
+    //   //         maxWidth: '100%',
+    //   //         // border: '2px solid red',
+    //   //         padding: '10px',
+    //   //         // backgroundColor: 'white',
+    //   //         display: 'block',
+    //   //       }}
+    //   //     />
+    //   //   );
+    //   // }
+
+    //   // For regular images, use default styling
+    //   return <img {...props} style={{ maxWidth: '100%' }} />;
+    // },
+
+    // Override the default code component for syntax highlighting
+    code: (props) => {
+      const { className, children } = props;
+      const match = /language-(\w+)/.exec(className || '');
+
+      // Skip math blocks - they will be handled by rehypeKatex
+      if (match && match[1] === 'math') {
+        return null;
       }
 
-      return !inline && match ? (
-        <SyntaxHighlighter
-          children={codeContent}
-          style={syntaxHighlighterTheme}
-          language={match[1]}
-          {...props}
-        />
+      const codeContent = String(children).replace(/\n$/, '');
+      const isInline = !match;
+
+      return !isInline && match ? (
+        <SyntaxHighlighter style={syntaxHighlighterTheme} language={match[1]}>
+          {codeContent}
+        </SyntaxHighlighter>
       ) : (
-        <code
-          className={className}
-          style={{
-            backgroundColor: theme.palette.background.default,
-            color: theme.palette.text.primary,
-            padding: '0.2em 0.4em',
-            borderRadius: '3px',
-          }}
-          {...props}
-        >
-          {children}
-        </code>
+        <code className={className}>{children}</code>
       );
-    },
-    img: ({ node, ...props }: ReactMarkdownImageProps) => {
-      const src = node.properties.src;
-      console.log('src:', src);
-      return <img {...props} src={src} style={{ maxWidth: '100%' }} />; // Ensure the <img> tag is returned and add maxWidth
     },
   };
 
   return (
     <Typography component='div' sx={{ color: theme.palette.text.primary }}>
       <ReactMarkdown
-        children={markdownContent}
-        remarkPlugins={[remarkMath, remarkImages]} // Add remarkImages here
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[
+          rehypeKatex, // Use rehypeKatex to handle math rendering
+          rehypeRaw, // Enable raw HTML rendering for the img tags
+        ]}
         components={components}
-      />
+        urlTransform={customUrlTransform} // Allow Base64 images
+      >
+        {markdownContent}
+      </ReactMarkdown>
     </Typography>
   );
 };
